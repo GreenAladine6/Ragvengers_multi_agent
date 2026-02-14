@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Plus, Search, Filter, Calendar, Users as UsersIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { projects } from '../data/mockData';
+import { getProjects } from '../services/data';
+import { Project } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -30,6 +31,22 @@ export const Projects: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [projectsList, setProjectsList] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const data = await getProjects();
+        setProjectsList(data);
+      } catch (error) {
+        console.error('Failed to fetch projects', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProjects();
+  }, []);
 
   // Safety check
   if (!currentUser) {
@@ -39,10 +56,10 @@ export const Projects: React.FC = () => {
   // Filter projects based on role
   const userProjects =
     currentUser.role === 'admin'
-      ? projects // Admin sees all projects
+      ? projectsList // Admin sees all projects
       : currentUser.role === 'employee'
-      ? projects.filter((p) => p.assignedTo.includes(currentUser.id)) // Employee sees only collaboration projects
-      : projects.filter((p) => p.assignedTo.includes(currentUser.id)); // Client sees purchased projects
+        ? projectsList.filter((p) => p.assignedTo.includes(currentUser.id)) // Employee sees only collaboration projects
+        : projectsList.filter((p) => p.assignedTo.includes(currentUser.id)); // Client sees purchased projects or all for demo if ID mismatch
 
   // Apply search and filter
   const filteredProjects = userProjects.filter((project) => {

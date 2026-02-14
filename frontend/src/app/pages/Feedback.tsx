@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Star, MessageSquare, Calendar, Send } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { projects, feedbacks } from '../data/mockData';
+import { getProjects, getFeedbacks, createFeedback } from '../services/data';
+import { Project, Feedback as FeedbackType } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
@@ -10,9 +11,33 @@ import { Badge } from '../components/ui/badge';
 
 export const Feedback: React.FC = () => {
   const { currentUser } = useAuth();
-  const [selectedProject, setSelectedProject] = useState<string>(projects[0].id);
+  const [selectedProject, setSelectedProject] = useState<string>('');
   const [rating, setRating] = useState<number>(0);
   const [feedbackText, setFeedbackText] = useState('');
+  const [projectsList, setProjectsList] = useState<Project[]>([]);
+  const [feedbacksList, setFeedbacksList] = useState<FeedbackType[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [projectsData, feedbacksData] = await Promise.all([
+          getProjects(),
+          getFeedbacks()
+        ]);
+        setProjectsList(projectsData);
+        setFeedbacksList(feedbacksData);
+        if (projectsData.length > 0) {
+          setSelectedProject(projectsData[0].id);
+        }
+      } catch (error) {
+        console.error('Failed to fetch data', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
 
   // Safety check
   if (!currentUser) {
@@ -22,29 +47,41 @@ export const Feedback: React.FC = () => {
   // Filter projects based on role
   const userProjects =
     currentUser.role === 'admin'
-      ? projects // Admin sees all projects
+      ? projectsList // Admin sees all projects
       : currentUser.role === 'employee'
-      ? projects.filter((p) => p.assignedTo.includes(currentUser.id)) // Employee sees collaboration projects
-      : projects.filter((p) => p.assignedTo.includes(currentUser.id)); // Client sees purchased projects
+        ? projectsList.filter((p) => p.assignedTo.includes(currentUser.id)) // Employee sees collaboration projects
+        : projectsList.filter((p) => p.assignedTo.includes(currentUser.id)); // Client sees purchased projects
 
   // Filter feedback based on role
   const projectFeedbacks =
     currentUser.role === 'client'
-      ? feedbacks.filter((f) => f.projectId === selectedProject) // Client sees feedback for selected project
+      ? feedbacksList.filter((f) => f.projectId === selectedProject) // Client sees feedback for selected project
       : currentUser.role === 'employee'
-      ? feedbacks.filter(
+        ? feedbacksList.filter(
           (f) =>
             f.projectId === selectedProject &&
             userProjects.some((p) => p.id === f.projectId)
         ) // Employee sees feedback only on their collaboration projects
-      : feedbacks.filter((f) => f.projectId === selectedProject); // Admin sees all feedback
+        : feedbacksList.filter((f) => f.projectId === selectedProject); // Admin sees all feedback
 
-  const handleSubmit = () => {
-    if (feedbackText.trim() && rating > 0) {
-      // In a real app, this would submit to backend
-      alert('Feedback submitted successfully!');
-      setFeedbackText('');
-      setRating(0);
+  const handleSubmit = async () => {
+    if (feedbackText.trim() && rating > 0 && currentUser) {
+      try {
+        await createFeedback({
+          text: feedbackText,
+          rating: rating,
+          id_project: parseInt(selectedProject),
+          id_client: parseInt(currentUser.id) // Assuming currentUser.id is client id
+        });
+        alert('Feedback submitted successfully!');
+        setFeedbackText('');
+        setRating(0);
+        // Refresh feedbacks
+        const updatedFeedbacks = await getFeedbacks();
+        setFeedbacksList(updatedFeedbacks);
+      } catch (error) {
+        alert('Failed to submit feedback');
+      }
     }
   };
 
@@ -96,11 +133,10 @@ export const Feedback: React.FC = () => {
                       className="transition-transform hover:scale-110"
                     >
                       <Star
-                        className={`h-8 w-8 ${
-                          star <= rating
-                            ? 'fill-amber-400 text-amber-400'
-                            : 'text-slate-300'
-                        }`}
+                        className={`h-8 w-8 ${star <= rating
+                          ? 'fill-amber-400 text-amber-400'
+                          : 'text-slate-300'
+                          }`}
                       />
                     </button>
                   ))}
@@ -139,7 +175,7 @@ export const Feedback: React.FC = () => {
               <CardTitle className="text-slate-800">Project Info</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {projects
+              {projectsList
                 .filter((p) => p.id === selectedProject)
                 .map((project) => {
                   const avgProgress =
@@ -167,8 +203,8 @@ export const Feedback: React.FC = () => {
                               project.status === 'done'
                                 ? 'bg-green-100 text-green-700 border-green-200'
                                 : project.status === 'in-progress'
-                                ? 'bg-blue-100 text-blue-700 border-blue-200'
-                                : 'bg-amber-100 text-amber-700 border-amber-200'
+                                  ? 'bg-blue-100 text-blue-700 border-blue-200'
+                                  : 'bg-amber-100 text-amber-700 border-amber-200'
                             }
                           >
                             {project.status}
@@ -216,11 +252,10 @@ export const Feedback: React.FC = () => {
                       {[1, 2, 3, 4, 5].map((star) => (
                         <Star
                           key={star}
-                          className={`h-4 w-4 ${
-                            star <= (feedback.rating || 0)
-                              ? 'fill-amber-400 text-amber-400'
-                              : 'text-slate-300'
-                          }`}
+                          className={`h-4 w-4 ${star <= (feedback.rating || 0)
+                            ? 'fill-amber-400 text-amber-400'
+                            : 'text-slate-300'
+                            }`}
                         />
                       ))}
                     </div>

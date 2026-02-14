@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { LogIn, UserPlus, Mail, Lock, User, Sparkles, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import * as authService from '../services/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -18,7 +19,7 @@ export const Login: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { login, currentUser } = useAuth();
-  
+
   const [isRegister, setIsRegister] = useState(searchParams.get('register') === 'true');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,19 +33,24 @@ export const Login: React.FC = () => {
     }
   }, [currentUser, navigate]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (isRegister) {
-      // Register new user
-      login(role, name || email.split('@')[0]);
-    } else {
-      // Login existing user (demo mode - always as client)
-      login(role, email.split('@')[0]);
+
+    try {
+      if (isRegister) {
+        await authService.register(email, password, role);
+        // After successful registration, log in
+        await login(email, password);
+        navigate('/dashboard');
+      } else {
+        await login(email, password);
+        navigate('/dashboard');
+      }
+    } catch (error: any) {
+      console.error("Authentication error:", error);
+      const errorMessage = error.response?.data?.detail || "Authentication failed. Please check your network and credentials.";
+      alert(errorMessage);
     }
-    
-    // Navigate to appropriate dashboard
-    navigate('/dashboard');
   };
 
   return (

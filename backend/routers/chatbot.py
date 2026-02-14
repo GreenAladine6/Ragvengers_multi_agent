@@ -2,16 +2,20 @@ import sys
 import os
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from .. import auth
+import auth
 
 # Add Astrafenix-AI to python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../Astrafenix-AI')))
 
 try:
     from rag_pipeline import JiraRAGPipeline
-except ImportError:
+except ImportError as e:
     # Fallback or mock if module not found (e.g. during initial setup)
-    print("Warning: Could not import JiraRAGPipeline. Chatbot will not function.")
+    print(f"Warning: Could not import JiraRAGPipeline: {e}")
+    print("Chatbot will use mock responses.")
+    JiraRAGPipeline = None
+except Exception as e:
+    print(f"Error loading JiraRAGPipeline: {e}")
     JiraRAGPipeline = None
 
 router = APIRouter(tags=["Chatbot"])
@@ -42,7 +46,12 @@ def get_rag_pipeline():
 async def chat(request: ChatRequest, current_user = Depends(auth.get_current_active_user)):
     pipeline = get_rag_pipeline()
     if not pipeline:
-         return ChatResponse(response="Chatbot service is not available.")
+        # Provide a mock intelligent response based on the query
+        mock_response = f"Mock response to your query: '{request.query}' for project {request.project_key}. The RAG pipeline is not fully initialized yet. Please check your JIRA credentials in environment variables."
+        return ChatResponse(response=mock_response)
     
-    response = pipeline.query(request.query, request.project_key)
-    return ChatResponse(response=response)
+    try:
+        response = pipeline.query(request.query, request.project_key)
+        return ChatResponse(response=response)
+    except Exception as e:
+        return ChatResponse(response=f"Error processing query: {str(e)}")

@@ -44,12 +44,23 @@ export const Layout: React.FC = () => {
     navigate('/');
   };
 
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase();
+  const getInitials = (name?: string) => {
+    try {
+      if (name && name.trim() !== '') {
+        return name
+          .split(' ')
+          .map((n) => n[0])
+          .join('')
+          .toUpperCase();
+      }
+      // Fallback to email initials if name is not provided
+      const email = String(currentUser?.email || '').trim();
+      if (!email) return 'U'; // Final fallback if email is also missing
+      const emailName = email.split('@')[0];
+      return (emailName || 'U').substring(0, 2).toUpperCase();
+    } catch (e) {
+      return 'U'; // Ultimate fallback on any error
+    }
   };
 
   const navigationItems = [
@@ -110,7 +121,7 @@ export const Layout: React.FC = () => {
   ];
 
   const filteredNavItems = navigationItems.filter((item) =>
-    item.roles.includes(currentUser.role)
+    item.roles.includes((currentUser.role as any) || 'client')
   );
 
   return (
@@ -181,7 +192,7 @@ export const Layout: React.FC = () => {
               }
               className="w-full justify-center"
             >
-              {currentUser.role.toUpperCase()}
+              {(currentUser.role || 'client').toUpperCase()}
             </Badge>
           </div>
         )}
@@ -222,8 +233,8 @@ export const Layout: React.FC = () => {
                     </AvatarFallback>
                   </Avatar>
                   <div className="text-left">
-                    <p className="text-sm font-medium">{currentUser.name}</p>
-                    <p className="text-xs text-slate-500">{currentUser.email}</p>
+                    <p className="text-sm font-medium">{currentUser.name || 'User'}</p>
+                    <p className="text-xs text-slate-500">{currentUser.email || 'No email'}</p>
                   </div>
                 </Button>
               </DropdownMenuTrigger>

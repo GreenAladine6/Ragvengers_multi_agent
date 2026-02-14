@@ -5,7 +5,7 @@ from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from . import database, models, schemas
+import database, models, schemas
 
 # Secret key to sign JWTs (should be env var in production)
 SECRET_KEY = "supersecretkey" 
@@ -40,7 +40,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
-        role: str = payload.get("role")
+        role: str = payload.get("role", "employee")  # Default to client if role not specified
         if email is None:
             raise credentials_exception
         token_data = schemas.TokenData(email=email, role=role)
@@ -48,10 +48,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         raise credentials_exception
         
     user = None
-    if role == "client":
-         user = db.query(models.Client).filter(models.Client.email == token_data.email).first()
-    else: # employee or admin
-         user = db.query(models.Employee).filter(models.Employee.email == token_data.email).first()
+    # Query correct table based on role
+    if role and role.lower() in ["employee", "admin"]:
+        # Employee or Admin - query Employee table
+        user = db.query(models.Employee).filter(models.Employee.email == token_data.email).first()
+    else:
+        # Client or unknown - query Client table
+        user = db.query(models.Client).filter(models.Client.email == token_data.email).first()
          
     if user is None:
         raise credentials_exception

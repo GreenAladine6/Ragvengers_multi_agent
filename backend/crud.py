@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
-from . import models, schemas
-from .auth import get_password_hash
+import models, schemas
+from auth import get_password_hash
 
 # --- Client CRUD ---
 def get_client(db: Session, client_id: int):

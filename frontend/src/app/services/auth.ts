@@ -45,8 +45,17 @@ export const logout = () => {
 };
 
 export const getCurrentUser = async (): Promise<User> => {
-    const response = await api.get<User>('/users/me');
-    return response.data;
+    const response = await api.get<any>('/users/me');
+    const data = response.data;
+    
+    // Map backend response to frontend User interface
+    return {
+        id: data.id_client || data.id_employee || data.id || '',
+        name: data.name || data.email?.split('@')[0] || 'User',
+        email: data.email || '',
+        role: (data.role || 'client') as any,
+        avatar: data.avatar,
+    };
 };
 
 export const isAuthenticated = (): boolean => {

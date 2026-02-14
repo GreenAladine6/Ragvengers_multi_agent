@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Sparkles } from 'lucide-react';
-import { projects } from '../data/mockData';
+import { getProjects, chatWithBot } from '../services/data';
+import { Project } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
@@ -15,7 +16,8 @@ interface Message {
 }
 
 export const Chatbot: React.FC = () => {
-  const [selectedProject, setSelectedProject] = useState<string>(projects[0].id);
+  const [selectedProject, setSelectedProject] = useState<string>('');
+  const [projectsList, setProjectsList] = useState<Project[]>([]);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -38,67 +40,23 @@ export const Chatbot: React.FC = () => {
     scrollToBottom();
   }, [messages]);
 
-  const generateBotResponse = (userMessage: string): string => {
-    const lowerMessage = userMessage.toLowerCase();
-    const project = projects.find((p) => p.id === selectedProject);
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const data = await getProjects();
+        setProjectsList(data);
+        if (data.length > 0) {
+          setSelectedProject(data[0].id);
+        }
+      } catch (error) {
+        console.error('Failed to fetch projects', error);
+      }
+    };
+    fetchProjects();
+  }, []);
 
-    if (!project) return 'I cannot find information about that project.';
 
-    if (lowerMessage.includes('progress') || lowerMessage.includes('status')) {
-      const avgProgress =
-        (project.progress.frontend +
-          project.progress.backend +
-          project.progress.database +
-          project.progress.chatbot) /
-        4;
-      return `The ${project.name} is currently ${
-        project.status
-      }. Overall progress is at ${Math.round(avgProgress)}%. Frontend: ${
-        project.progress.frontend
-      }%, Backend: ${project.progress.backend}%, Database: ${
-        project.progress.database
-      }%, Chatbot: ${project.progress.chatbot}%.`;
-    }
-
-    if (lowerMessage.includes('frontend')) {
-      return `The frontend for ${project.name} is ${project.progress.frontend}% complete. We're using React and TypeScript to build a modern, responsive interface.`;
-    }
-
-    if (lowerMessage.includes('backend')) {
-      return `The backend for ${project.name} is ${project.progress.backend}% complete. We're building it with Node.js and Express for scalability and performance.`;
-    }
-
-    if (lowerMessage.includes('database')) {
-      return `The database for ${project.name} is ${project.progress.database}% complete. We're using PostgreSQL for reliable data storage and management.`;
-    }
-
-    if (lowerMessage.includes('chatbot') || lowerMessage.includes('ai')) {
-      return `The AI chatbot feature for ${project.name} is ${project.progress.chatbot}% complete. It will provide intelligent assistance and automation.`;
-    }
-
-    if (lowerMessage.includes('deadline') || lowerMessage.includes('due')) {
-      return `The ${project.name} is due on ${new Date(
-        project.dueDate
-      ).toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })}. We started on ${new Date(project.startDate).toLocaleDateString()}.`;
-    }
-
-    if (lowerMessage.includes('team')) {
-      return `The ${project.name} has ${project.assignedTo.length} team members working on it. They're collaborating across all aspects of development.`;
-    }
-
-    if (lowerMessage.includes('hello') || lowerMessage.includes('hi')) {
-      return `Hello! I'm here to help you with information about ${project.name}. Feel free to ask about progress, deadlines, or any specific components!`;
-    }
-
-    return `I can help you with information about ${project.name}. Try asking about progress, frontend, backend, database, AI features, deadlines, or the team!`;
-  };
-
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!inputValue.trim()) return;
 
     const userMessage: Message = {
@@ -111,16 +69,24 @@ export const Chatbot: React.FC = () => {
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
 
-    // Simulate bot response delay
-    setTimeout(() => {
+    try {
+      const responseText = await chatWithBot(inputValue, selectedProject);
       const botResponse: Message = {
         id: (Date.now() + 1).toString(),
-        content: generateBotResponse(inputValue),
+        content: responseText,
         isBot: true,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, botResponse]);
-    }, 500);
+    } catch (error) {
+      const errorResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        content: "Sorry, I encountered an error while processing your request.",
+        isBot: true,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorResponse]);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -152,7 +118,7 @@ export const Chatbot: React.FC = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {projects.map((project) => (
+                  {projectsList.map((project) => (
                     <SelectItem key={project.id} value={project.id}>
                       {project.name}
                     </SelectItem>
@@ -196,9 +162,8 @@ export const Chatbot: React.FC = () => {
               {messages.map((message) => (
                 <div
                   key={message.id}
-                  className={`flex gap-3 ${
-                    message.isBot ? 'justify-start' : 'justify-end'
-                  }`}
+                  className={`flex gap-3 ${message.isBot ? 'justify-start' : 'justify-end'
+                    }`}
                 >
                   {message.isBot && (
                     <Avatar className="h-8 w-8 flex-shrink-0">
@@ -208,17 +173,15 @@ export const Chatbot: React.FC = () => {
                     </Avatar>
                   )}
                   <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
-                      message.isBot
+                    className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${message.isBot
                         ? 'bg-white border border-slate-200'
                         : 'bg-gradient-to-br from-blue-500 to-purple-600 text-white'
-                    }`}
+                      }`}
                   >
                     <p className="text-sm">{message.content}</p>
                     <p
-                      className={`text-xs mt-1 ${
-                        message.isBot ? 'text-slate-400' : 'text-blue-100'
-                      }`}
+                      className={`text-xs mt-1 ${message.isBot ? 'text-slate-400' : 'text-blue-100'
+                        }`}
                     >
                       {message.timestamp.toLocaleTimeString([], {
                         hour: '2-digit',

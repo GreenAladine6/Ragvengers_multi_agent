@@ -299,18 +299,148 @@ class GitHubTokenTester:
         
         return True
 
+def test_feedback_system():
+    """
+    Test the feedback system - demonstrate how to use ingest_feedback
+    """
+    print("\n" + "="*60)
+    print(" FEEDBACK SYSTEM TESTER")
+    print("="*60)
+    
+    # Import the orchestrator
+    from core.orchestrator import BusinessReportOrchestrator
+    
+    orchestrator = BusinessReportOrchestrator()
+    
+    # Simulate some analyses (normally these would come from the analyzer)
+    simulated_analyses = {
+        'app.py': {
+            'type': 'python',
+            'key_functions': [
+                {'name': 'authenticate', 'line': 10, 'purpose': '🔐 Handles user login'},
+                {'name': 'calculate_discount', 'line': 25, 'purpose': '🧮 Performs calculations'}
+            ],
+            'business_rules': [
+                {'description': 'if user_age > 18: allow_checkout', 'line': 45, 'type': 'age_check'}
+            ]
+        },
+        'checkout.py': {
+            'type': 'python',
+            'key_functions': [
+                {'name': 'process_payment', 'line': 50, 'purpose': '💰 Processes payments'}
+            ]
+        }
+    }
+    
+    # Set the orchestrator state with these analyses
+    orchestrator.last_analyses = simulated_analyses
+    
+    print("\n📊 Simulated code analysis loaded:")
+    for path, analysis in simulated_analyses.items():
+        print(f"   • {path}: {len(analysis.get('key_functions', []))} functions, {len(analysis.get('business_rules', []))} rules")
+    
+    # Test 1: Free-text feedback with pattern matching
+    print("\n" + "-"*60)
+    print("TEST 1: Free-text Feedback with Pattern Matching")
+    print("-"*60)
+    
+    feedback_msg = "function authenticate should validate email format and check for SQL injection"
+    print(f"\n📝 User feedback: \"{feedback_msg}\"")
+    
+    result = orchestrator.ingest_feedback(feedback_msg)
+    print(f"✅ Result: {result.get('summary')}")
+    if result['applied']:
+        print(f"\n📋 Applied {len(result['applied'])} correction(s):")
+        for item in result['applied']:
+            print(f"   • {item['file'].split('/')[-1]} → {item['target']}: {item['correction']}")
+    
+    # Test 2: Structured feedback with explicit corrections
+    print("\n" + "-"*60)
+    print("TEST 2: Structured Feedback with Corrections")
+    print("-"*60)
+    
+    structured_feedback = {
+        'message': 'Found issues in discount logic',
+        'corrections': [
+            {
+                'original': 'calculate_discount',
+                'corrected': 'Applies 15% discount on orders over $100',
+                'type': 'function_purpose'
+            },
+            {
+                'original': 'if user_age > 18: allow_checkout',
+                'corrected': 'Only users age 18+ can purchase restricted items',
+                'type': 'business_rule'
+            }
+        ]
+    }
+    
+    print(f"\n📝 Structured feedback with {len(structured_feedback['corrections'])} corrections:")
+    for c in structured_feedback['corrections']:
+        print(f"   • {c['original']} → {c['corrected']}")
+    
+    result = orchestrator.ingest_feedback(
+        structured_feedback['message'],
+        structured_feedback
+    )
+    
+    print(f"\n✅ Result: {result.get('summary')}")
+    if result['applied']:
+        print(f"\n📋 Applied {len(result['applied'])} correction(s):")
+        for item in result['applied']:
+            print(f"   • {item['file'].split('/')[-1]} → {item['target']}: {item['correction']}")
+    
+    # Test 3: Invalid feedback (no matches)
+    print("\n" + "-"*60)
+    print("TEST 3: Invalid/Unmatched Feedback")
+    print("-"*60)
+    
+    invalid_feedback = "function xyz_nonexistent should do something"
+    print(f"\n📝 Invalid feedback: \"{invalid_feedback}\"")
+    
+    result = orchestrator.ingest_feedback(invalid_feedback)
+    print(f"✅ Result: {result.get('summary')}")
+    if result['skipped']:
+        print(f"\n⚠️ Skipped {len(result['skipped'])} unmatched item(s)")
+        for item in result['skipped']:
+            print(f"   • Could not match: {item.get('original')}")
+    
+    print("\n" + "="*60)
+    print("✅ All feedback tests completed!")
+    print("="*60)
+
 def main():
     """Main entry point"""
+    import sys
+    
+    print("\n" + "="*60)
+    print(" SYSTEM TESTER")
+    print("="*60)
+    print("\nChoose what to test:")
+    print("  1. GitHub Token (default)")
+    print("  2. Feedback System")
+    print("  3. Both")
+    
     try:
-        tester = GitHubTokenTester()
-        tester.run_all_tests()
-    except ValueError as e:
-        print(f"\n❌ {e}")
-        print("\n📝 To fix:")
-        print("   1. Create a .env file")
-        print("   2. Add: GITHUB_TOKEN=your_token_here")
-        print("   3. Get token from: https://github.com/settings/tokens")
-        sys.exit(1)
+        choice = input("\nEnter choice (1-3) or press Enter for #1: ").strip() or "1"
+        
+        if choice in ["1", "3"]:
+            try:
+                tester = GitHubTokenTester()
+                tester.run_all_tests()
+            except ValueError as e:
+                print(f"\n❌ {e}")
+                print("\n📝 To fix:")
+                print("   1. Create a .env file")
+                print("   2. Add: GITHUB_TOKEN=your_token_here")
+                print("   3. Get token from: https://github.com/settings/tokens")
+        
+        if choice in ["2", "3"]:
+            test_feedback_system()
+            
+    except KeyboardInterrupt:
+        print("\n\nInterrupted by user")
+        sys.exit(0)
     except Exception as e:
         print(f"\n❌ Unexpected error: {e}")
         sys.exit(1)

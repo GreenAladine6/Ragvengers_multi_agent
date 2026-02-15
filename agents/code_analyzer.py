@@ -260,3 +260,75 @@ class CodeAnalyzer:
             return "🔍 Searches content - helps users find things"
         
         return f"Function {func_name} - check code for details"
+
+    def process_feedback(self, feedback: Dict[str, Any], analyses: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Accept structured feedback or free-text and apply lightweight corrections
+        to the provided analyses. This is intentionally simple: it records
+        corrections and returns a short reconciliation result that higher-level
+        orchestrator code can persist or display.
+        """
+        result = {
+            'applied': [],
+            'skipped': [],
+            'summary': ''
+        }
+
+        if analyses is None:
+            analyses = {}
+
+        # Prefer explicit corrections payload
+        corrections = feedback.get('corrections') or []
+
+        # If the feedback is a free-text message, try to extract simple patterns
+        if not corrections and isinstance(feedback.get('message'), str):
+            msg = feedback.get('message')
+            # Very small heuristic: look for "function <name> -> <purpose>" patterns
+            import re
+            matches = re.findall(r'function\s+(\w+)\s*[:\-]>?\s*([\w\s]+)', msg, re.IGNORECASE)
+            for m in matches:
+                corrections.append({'original': m[0], 'corrected': m[1].strip(), 'type': 'function_purpose'})
+
+        # Apply corrections into analyses: try to match by function name or rule text
+        for c in corrections:
+            applied = False
+            orig = c.get('original', '')
+            corrected = c.get('corrected', '')
+
+            # Try to update function purposes
+            for path, analysis in analyses.items():
+                funcs = analysis.get('key_functions', [])
+                for f in funcs:
+                    # match by name either exact or substring
+                    if orig and (orig == f.get('name') or orig in f.get('name')):
+                        # attach an override
+                        f.setdefault('feedback_overrides', []).append({'corrected_purpose': corrected})
+                        result['applied'].append({'file': path, 'target': f.get('name'), 'correction': corrected})
+                        applied = True
+                        break
+                if applied:
+                    break
+
+            # If not applied to functions, try business_rules
+            if not applied:
+                for path, analysis in analyses.items():
+                    rules = analysis.get('business_rules', [])
+                    for r in rules:
+                        if orig and (orig in r.get('description', '') or orig == r.get('description')):
+                            r.setdefault('feedback_overrides', []).append({'corrected': corrected})
+                            result['applied'].append({'file': path, 'target': 'business_rule', 'correction': corrected})
+                            applied = True
+                            break
+                    if applied:
+                        break
+
+            if not applied:
+                # Nothing matched — record skipped for manual review
+                result['skipped'].append(c)
+
+        # Build a human summary
+        applied_n = len(result['applied'])
+        skipped_n = len(result['skipped'])
+        result['summary'] = f"Applied {applied_n} correction(s); {skipped_n} unhandled."
+
+        return result

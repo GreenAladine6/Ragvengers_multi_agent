@@ -31,6 +31,24 @@ class FeedbackCollector:
             'engagement_time': random.randint(30, 300),
             'downloaded': random.choice([True, False])
         }
+
+    def ingest_user_feedback(self, message: str, structured: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Ingest a user-supplied feedback message. If `structured` is provided,
+        prefer it (it should include 'corrections' list). Returns a normalized
+        feedback dict ready to be passed to `CodeAnalyzer.process_feedback`.
+        """
+        feedback = {
+            'message': message,
+            'corrections': []
+        }
+
+        if structured:
+            # Basic validation - ensure corrections is a list
+            corr = structured.get('corrections') or []
+            if isinstance(corr, list):
+                feedback['corrections'] = corr
+        return feedback
     
     def _simulate_corrections(self, state: Dict) -> List[Dict]:
         """Simulate corrections for low confidence cases"""

@@ -5,12 +5,15 @@ Main orchestrator that coordinates the entire workflow
 
 import asyncio
 from datetime import datetime
+from typing import Dict, Any
 
 from github.file_downloader import GitHubFileDownloader
 from agents.code_analyzer import CodeAnalyzer
 from agents.business_translator import BusinessTranslator
+from feedback.collector import FeedbackCollector
 from models.ollama_client import OllamaClient
 from utils.logger import logger
+from utils.cache import cache
 
 class BusinessReportOrchestrator:
     """
@@ -26,6 +29,12 @@ class BusinessReportOrchestrator:
         self.analyzer = CodeAnalyzer()
         self.translator = BusinessTranslator()
         self.ollama = OllamaClient()
+        self.feedback_collector = FeedbackCollector()
+
+        # In-memory state for the last run (simple persistence)
+        self.state: Dict[str, Any] = {}
+        self.last_analyses: Dict[str, Any] = {}
+        self.last_business_report: Dict[str, Any] = {}
     
     async def generate_report(self, repo_url: str, files_to_download: list = None):
         """
@@ -70,10 +79,16 @@ class BusinessReportOrchestrator:
             analysis = self.analyzer.analyze_file(file_info)
             file_analyses[path] = analysis
             logger.info(f"   ✅ Analyzed {path} - {analysis.get('type', 'unknown')}")
+
+        # Store latest analyses for potential feedback reconciliation
+        self.last_analyses = file_analyses
         
         # Step 4: Translate to business language
         logger.info("💼 Translating to business language...")
         business_report = self.translator.translate(file_analyses)
+
+        # Keep last business report for feedback handlers
+        self.last_business_report = business_report
         
         # Step 5: Generate final HTML report
         logger.info("📊 Generating business report...")
@@ -92,8 +107,42 @@ class BusinessReportOrchestrator:
         
         # Also print a quick summary
         self._print_summary(business_report, len(downloaded_files), start_time)
-        
+        # Update simple state
+        self.state.update({
+            'repo_url': repo_url,
+            'files': downloaded_files,
+            'files_fetched': len(downloaded_files),
+            'business_context': business_report,
+            'confidence_score': business_report.get('confidence', 0.85),
+            'report': html_report,
+        })
+
         return html_report
+
+    def ingest_feedback(self, message: str, structured: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Accept a user's feedback message (free-text) plus optional structured
+        corrections, normalize via FeedbackCollector, route to the
+        CodeAnalyzer for lightweight application, and persist the result.
+        Returns a reconciliation summary dict.
+        """
+        # Normalize the incoming feedback
+        feedback = self.feedback_collector.ingest_user_feedback(message, structured)
+
+        # Process feedback against last analyses
+        result = self.analyzer.process_feedback(feedback, self.last_analyses)
+
+        # Persist feedback and result to in-memory state and cache
+        self.state['feedback'] = feedback
+        self.state['feedback_result'] = result
+        try:
+            cache.set('last_feedback', {'feedback': feedback, 'result': result}, ttl=3600)
+        except Exception:
+            # cache is optional — don't fail if persistence isn't available
+            logger.debug('Could not persist feedback to cache')
+
+        logger.info(f"📝 Ingested feedback: {result.get('summary')}")
+        return result
     
     async def _generate_html_report(self, repo_url, files, analyses, business_report, start_time):
         """Generate beautiful HTML report"""
@@ -265,6 +314,12 @@ class BusinessReportOrchestrator:
         .badge-html {{ background: #e34c26; color: white; }}
         .badge-css {{ background: #264de4; color: white; }}
         .badge-docs {{ background: #28a745; color: white; }}
+        .feedback-box {{
+            background: linear-gradient(135deg, #f0f4ff 0%, #f5f0ff 100%);
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #e0e4ff;
+        }}
         .footer {{
             text-align: center;
             padding: 30px;
@@ -353,12 +408,46 @@ class BusinessReportOrchestrator:
         html_report += f"""
             </div>
         </div>
-        
+
+        <div class="section">
+            <div class="section-title">💬 Feedback & Improvements</div>
+            <div class="feedback-box">
+                <p style="color: #666; margin-bottom: 15px;">Found something inaccurate? Help us improve the analysis!</p>
+                <textarea id="feedback-input" placeholder="Example: 'function calculate_discount should apply 15% discount on orders over $100'&#10;&#10;Or list specific corrections like:&#10;- function_name: new_or_corrected_purpose&#10;- another_function: fixed_description" style="width: 100%; height: 120px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-family: monospace; font-size: 0.9em;"></textarea>
+                <button id="submit-feedback-btn" onclick="submitFeedback()" style="margin-top: 10px; padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">Submit Feedback</button>
+                <div id="feedback-status" style="margin-top: 10px; color: #666; font-size: 0.9em;"></div>
+            </div>
+        </div>
+
         <div class="footer">
             <p>🤖 Generated by AI Agents • DeepSeek + Ollama</p>
             <p>This report translates code changes into business value</p>
+            <p style="font-size: 0.85em; color: #999; margin-top: 10px;">💡 Tip: Use the feedback box above to help us improve future analyses!</p>
         </div>
     </div>
+
+    <script>
+        function submitFeedback() {{
+            const feedbackText = document.getElementById('feedback-input').value.trim();
+            const statusDiv = document.getElementById('feedback-status');
+            
+            if (!feedbackText) {{
+                statusDiv.textContent = '⚠️ Please enter feedback before submitting.';
+                statusDiv.style.color = '#ff9800';
+                return;
+            }}
+            
+            statusDiv.textContent = '📤 Submitting feedback...';
+            statusDiv.style.color = '#667eea';
+            
+            // In a real app, this would POST to your backend
+            // For now, show instructions
+            setTimeout(() => {{
+                statusDiv.innerHTML = '✅ Feedback captured! Pass this to the code analyzer:<br><code style="background: #f0f0f0; padding: 5px; display: block; margin-top: 5px; word-break: break-all;">' + feedbackText + '</code>';
+                statusDiv.style.color = '#4caf50';
+            }}, 500);
+        }}
+    </script>
 </body>
 </html>
 """

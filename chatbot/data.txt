@@ -1,0 +1,87 @@
+-- =======================
+-- CLIENT
+-- =======================
+CREATE TABLE client (
+    id_client SERIAL PRIMARY KEY,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    number VARCHAR(20)
+);
+
+-- =======================
+-- EMPLOYEE
+-- =======================
+CREATE TABLE employee (
+    id_employee SERIAL PRIMARY KEY,
+    role VARCHAR(50) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    number VARCHAR(20)
+);
+
+-- =======================
+-- PROJECT
+-- =======================
+CREATE TABLE project (
+    id_project SERIAL PRIMARY KEY,
+    git_repo TEXT,
+    start_date DATE,
+    end_date DATE,
+    status VARCHAR(50),
+    duration INT,
+    id_client INT NOT NULL,
+    CONSTRAINT fk_project_client
+        FOREIGN KEY (id_client)
+        REFERENCES client(id_client)
+        ON DELETE CASCADE
+);
+
+-- =======================
+-- PROJECT_EMPLOYEE (M:N)
+-- =======================
+CREATE TABLE project_employee (
+    id_project INT NOT NULL,
+    id_employee INT NOT NULL,
+    PRIMARY KEY (id_project, id_employee),
+    CONSTRAINT fk_pe_project
+        FOREIGN KEY (id_project)
+        REFERENCES project(id_project)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_pe_employee
+        FOREIGN KEY (id_employee)
+        REFERENCES employee(id_employee)
+        ON DELETE CASCADE
+);
+
+-- =======================
+-- REPORT
+-- =======================
+CREATE TABLE report (
+    id_report SERIAL PRIMARY KEY,
+    creation_date DATE,
+    attachment TEXT,
+    id_project INT NOT NULL,
+    CONSTRAINT fk_report_project
+        FOREIGN KEY (id_project)
+        REFERENCES project(id_project) #description
+        ON DELETE CASCADE 
+);
+
+-- =======================
+-- FEEDBACK
+-- =======================
+CREATE TABLE feedback (
+    id_feedback SERIAL PRIMARY KEY,
+    feedback_date DATE,
+    text TEXT NOT NULL,
+    id_project INT NOT NULL,
+    id_client INT NOT NULL,
+    CONSTRAINT fk_feedback_project
+        FOREIGN KEY (id_project)
+        REFERENCES project(id_project)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_feedback_client
+        FOREIGN KEY (id_client)
+        REFERENCES client(id_client)
+        ON DELETE CASCADE
+);

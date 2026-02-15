@@ -42,11 +42,17 @@ class Employee(EmployeeBase):
 
 # --- Project Schemas ---
 class ProjectBase(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
     git_repo: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     status: Optional[str] = None
     duration: Optional[int] = None
+    progress_frontend: Optional[int] = 0
+    progress_backend: Optional[int] = 0
+    progress_database: Optional[int] = 0
+    progress_chatbot: Optional[int] = 0
     id_client: int
 
 class ProjectCreate(ProjectBase):
@@ -77,6 +83,7 @@ class Report(ReportBase):
 class FeedbackBase(BaseModel):
     feedback_date: Optional[date] = None
     text: str
+    rating: Optional[int] = None
     id_project: int
     id_client: int
 

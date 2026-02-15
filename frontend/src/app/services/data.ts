@@ -6,14 +6,14 @@ export const getProjects = async (): Promise<Project[]> => {
     const response = await api.get<any[]>('/projects/');
     return response.data.map((p) => ({
         id: p.id_project.toString(),
-        name: p.git_repo ? p.git_repo.split('/').pop() || `Project ${p.id_project}` : `Project ${p.id_project}`,
-        description: p.git_repo || 'No description available',
+        name: p.name || `Project ${p.id_project}`,
+        description: p.description || 'No description available',
         status: (p.status as any) || 'pending',
         progress: {
-            frontend: 0,
-            backend: 0,
-            database: 0,
-            chatbot: 0,
+            frontend: p.progress_frontend || 0,
+            backend: p.progress_backend || 0,
+            database: p.progress_database || 0,
+            chatbot: p.progress_chatbot || 0,
         },
         teamId: '0',
         assignedTo: [], // TODO: Fetch from assigned employees
@@ -29,8 +29,15 @@ export const createProject = async (projectData: any): Promise<Project> => {
 
 // Feedback
 export const getFeedbacks = async (): Promise<Feedback[]> => {
-    const response = await api.get<Feedback[]>('/feedback/');
-    return response.data;
+    const response = await api.get<any[]>('/feedback/');
+    return response.data.map((f) => ({
+        id: f.id_feedback.toString(),
+        projectId: f.id_project.toString(),
+        userId: f.id_client.toString(),
+        message: f.text,
+        timestamp: f.feedback_date || new Date().toISOString(),
+        rating: f.rating,
+    }));
 };
 
 export const createFeedback = async (feedbackData: any): Promise<Feedback> => {

@@ -28,11 +28,17 @@ class Project(Base):
     __tablename__ = "project"
 
     id_project = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255))
+    description = Column(Text)
     git_repo = Column(Text)
     start_date = Column(Date)
     end_date = Column(Date)
     status = Column(String(50))
     duration = Column(Integer)
+    progress_frontend = Column(Integer, default=0)
+    progress_backend = Column(Integer, default=0)
+    progress_database = Column(Integer, default=0)
+    progress_chatbot = Column(Integer, default=0)
     id_client = Column(Integer, ForeignKey("client.id_client"), nullable=False)
 
     client = relationship("Client", back_populates="projects")
@@ -65,6 +71,7 @@ class Feedback(Base):
     id_feedback = Column(Integer, primary_key=True, index=True)
     feedback_date = Column(Date)
     text = Column(Text, nullable=False)
+    rating = Column(Integer)
     id_project = Column(Integer, ForeignKey("project.id_project"), nullable=False)
     id_client = Column(Integer, ForeignKey("client.id_client"), nullable=False)
 

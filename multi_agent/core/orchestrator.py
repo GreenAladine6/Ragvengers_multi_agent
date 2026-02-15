@@ -95,12 +95,22 @@ class BusinessReportOrchestrator:
             start_time
         )
 
-        # Step 6: Save to Database
+        # Also produce a plain-text representation for DB storage
+        text_report = self._generate_text_report(
+            repo_url,
+            downloaded_files,
+            file_analyses,
+            business_report,
+            start_time,
+        )
+
+        # Step 6: Save to Database (store plain text in report_content, HTML in attachment)
         logger.info("💾 Saving report to database...")
         processing_time = (datetime.now() - start_time).total_seconds()
         
         report_data = {
-            'report_content': html_report,
+            'report_content': text_report,
+            'attachment': html_report,
             'summary': business_report.get('summary', ''),
             'features_count': len(business_report.get('features', [])),
             'business_rules_count': len(business_report.get('business_logic', [])),
@@ -113,11 +123,7 @@ class BusinessReportOrchestrator:
         
         self.db_client.save_report(report_data)
         
-        # Step 7: Print the report (Optional: keep for logging)
-        # print("\n" + "="*80)
-        # print(html_report)
-        # print("="*80)
-        
+        # Keep printing only the concise summary (no large HTML dump)
         self._print_summary(business_report, len(downloaded_files), start_time)
         
         return html_report
@@ -455,6 +461,53 @@ class BusinessReportOrchestrator:
 </html>
 """
     
+    def _generate_text_report(self, repo_url, files, analyses, business_report, start_time):
+        """Create a compact plain-text version of the business report.
+        This is what we persist into the `report.report_content` column.
+        """
+        processing_time = (datetime.now() - start_time).total_seconds()
+        lines = []
+        lines.append(f"Business Impact Report — {repo_url}")
+        lines.append(f"Generated: {datetime.now().isoformat()}")
+        lines.append(f"Processing time: {processing_time:.1f}s")
+        lines.append("")
+
+        # Executive summary
+        lines.append("Executive summary:")
+        lines.append(business_report.get('summary', 'Analysis complete.'))
+        lines.append("")
+
+        # Top features
+        if business_report.get('features'):
+            lines.append("Features:")
+            for feat in business_report.get('features', [])[:20]:
+                lines.append(f"- {feat}")
+            lines.append("")
+
+        # UI items
+        if business_report.get('user_interfaces'):
+            lines.append("UI changes:")
+            for ui in business_report.get('user_interfaces', [])[:20]:
+                lines.append(f"- {ui}")
+            lines.append("")
+
+        # Business rules
+        if business_report.get('business_logic'):
+            lines.append("Business rules:")
+            for rule in business_report.get('business_logic', [])[:20]:
+                if isinstance(rule, dict):
+                    lines.append(f"- {rule.get('description', '')}")
+                else:
+                    lines.append(f"- {rule}")
+            lines.append("")
+
+        # Files analyzed
+        lines.append(f"Files analyzed ({len(files)}):")
+        for path, analysis in analyses.items():
+            lines.append(f"- {path} ({analysis.get('type','unknown')})")
+
+        return "\n".join(lines)
+
     def _print_summary(self, business_report, files_count, start_time):
         """Print a quick console summary"""
         processing_time = (datetime.now() - start_time).total_seconds()
@@ -475,43 +528,3 @@ class BusinessReportOrchestrator:
                 print(f"   • {rule.get('description', '')[:80]}")
         
         print("\n" + "="*60)
-    # In core/orchestrator.py, update the generate_report method:
-
-async def generate_report(self, repo_url: str, files_to_download: list = None):
-    """
-    Main method: Download files, analyze, and generate business report
-    """
-    logger.info(f"🚀 Starting business report generation for {repo_url}")
-    start_time = datetime.now()
-    
-    # ... (existing download and analysis code remains the same)
-    
-    # After analysis, prepare metadata for report
-    file_details = {}
-    for path, analysis in file_analyses.items():
-        file_details[path] = analysis.get('type', 'unknown')
-    
-    metadata = {
-        'repo_url': repo_url,
-        'files_fetched': len(downloaded_files),
-        'total_files': len(files_to_download),
-        'processing_time': (datetime.now() - start_time).total_seconds(),
-        'api_calls': self.downloader.api_calls,
-        'cache_hits': 0,  # You can track this if needed
-        'confidence': business_report.get('confidence', 0.85),
-        'file_details': file_details
-    }
-    
-    # Generate text report
-    logger.info("📊 Generating text business report...")
-    text_report = await self.report_agent.generate(business_report, metadata)
-    
-    # Print the beautiful text report
-    print("\n" + "="*80)
-    print(text_report['text'])
-    print("="*80)
-    
-    # Also print quick summary
-    self._print_summary(text_report, len(downloaded_files), start_time)
-    
-    return text_report

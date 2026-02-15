@@ -42,15 +42,16 @@ class DatabaseClient:
             cur = conn.cursor()
             query = """
                 INSERT INTO report (
-                    creation_date, report_content, summary, features_count, 
+                    creation_date, report_content, attachment, summary, features_count, 
                     business_rules_count, files_analyzed, repo_url, 
                     processing_time_seconds, confidence_score, id_project
                 ) VALUES (
-                    CURRENT_DATE, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    CURRENT_DATE, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                 ) RETURNING id_report;
             """
             cur.execute(query, (
                 report_data['report_content'],
+                report_data.get('attachment'),
                 report_data.get('summary'),
                 report_data.get('features_count', 0),
                 report_data.get('business_rules_count', 0),
